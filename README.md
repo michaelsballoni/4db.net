@@ -1,2 +1,2 @@
 # 4db
-Simple database for high productivity and ease of use
+A simple database for high productivity and ease of use
