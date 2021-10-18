@@ -30,12 +30,6 @@ namespace fourdb
         }
     }
 
-    public class GetRequest
-    {
-        public string table { get; set; }
-        public List<object> values { get; set; }
-    }
-
     public class Criteria // WHERE
     {
         public string name { get; set; }
@@ -81,8 +75,9 @@ namespace fourdb
         public bool descending { get; set; }
     }
 
-    public class QueryGetRequest
+    public class Select
     {
+        public List<string> select { get; set; }
         public string from { get; set; } // FROM
         public List<CriteriaSet> where { get; set; }
         public List<Order> orderBy { get; set; }
@@ -90,7 +85,7 @@ namespace fourdb
 
         public Dictionary<string, object> cmdParams { get; set; }
 
-        public QueryGetRequest AddParam(string name, object value)
+        public Select AddParam(string name, object value)
         {
             if (cmdParams == null)
                 cmdParams = new Dictionary<string, object>();
@@ -98,54 +93,13 @@ namespace fourdb
             return this;
         }
 
-        public QueryGetRequest AddOrder(string name, bool descending)
+        public Select AddOrder(string name, bool descending)
         {
             if (orderBy == null)
                 orderBy = new List<Order>();
             orderBy.Add(new Order() { field = name, descending = descending });
             return this;
         }
-    }
-
-    public class Select : QueryGetRequest
-    {
-        public List<string> select { get; set; }
-    }
-
-    public class GetResponse
-    {
-        public List<Dictionary<string, object>> metadata { get; set; }
-    }
-
-    public class Delete
-    {
-        public string table { get; set; }
-        public List<object> values { get; set; } = new List<object>();
-
-        public Delete() { }
-
-        public Delete(string table, object value)
-        {
-            this.table = table;
-            values.Add(value);
-        }
-
-        public Delete(string table, IEnumerable<object> values)
-        {
-            this.table = table;
-            this.values.AddRange(values);
-        }
-
-        public Delete AddValue(object value)
-        {
-            values.Add(value);
-            return this;
-        }
-    }
-
-    public class Schema
-    {
-        public string table { get; set; } // optional to get the full schema
     }
 
     public class SchemaResponse

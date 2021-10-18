@@ -34,11 +34,9 @@ namespace fourdb
                         RunSql(db, Names.CreateSql);
                         RunSql(db, Values.CreateSql);
                         RunSql(db, Items.CreateSql);
+                        RunSql(db, new[] { "PRAGMA journal_mode = WAL", "PRAGMA synchronous = NORMAL" });
                     }
                 }
-
-                using (var db = new SqlLiteDb(actualDbConnStr))
-                    RunSql(db, new[] { "PRAGMA journal_mode = WAL", "PRAGMA synchronous = NORMAL" });
             }
 
             Db = new SqlLiteDb(actualDbConnStr);
@@ -60,18 +58,6 @@ namespace fourdb
         /// The database connection
         /// </summary>
         public IDb Db { get; private set; }
-
-        /// <summary>
-        /// Transactions are supported, 
-        /// but should not be used around any code affecting data 
-        /// in the Table, Name, Value, etc. metastrings database
-        /// as rollbacks would break the global in-memory caching
-        /// </summary>
-        /// <returns>Transaction object</returns>
-        public MsTrans BeginTrans()
-        {
-            return Db.BeginTrans();
-        }
 
         /// <summary>
         /// Query helper function to get a reader for a query
@@ -222,13 +208,13 @@ namespace fourdb
                     ScopeTiming.RecordScope("Define.ItemsCommit", localTimer);
                 }
 
-                await this.ProcessPostOpsAsync().ConfigureAwait(false);
+                await ProcessPostOpsAsync().ConfigureAwait(false);
                 ScopeTiming.RecordScope("Define.PostOps", localTimer);
             }
 #if !DEBUG
             catch
             {
-                this.ClearPostOps();
+                ClearPostOps();
                 throw;
             }
 #endif
@@ -259,99 +245,13 @@ namespace fourdb
         }
 
         /// <summary>
-        /// Get the metadata for a set of items
-        /// </summary>
-        /// <param name="request">List of values to get metadata for</param>
-        /// <returns>Metadata for the items</returns>
-        public async Task<GetResponse> GetAsync(GetRequest request)
-        {
-            var totalTimer = ScopeTiming.StartTiming();
-            try
-            {
-                var responses = new List<Dictionary<string, object>>(request.values.Count);
-
-                int tableId = await Tables.GetIdAsync(this, request.table, noCreate: true).ConfigureAwait(false);
-                foreach (var value in request.values)
-                {
-                    long valueId = await Values.GetIdAsync(this, value).ConfigureAwait(false);
-
-                    long itemId = await Items.GetIdAsync(this, tableId, valueId, noCreate: true).ConfigureAwait(false);
-                    if (itemId < 0)
-                    {
-                        responses.Add(null);
-                        continue;
-                    }
-
-                    var metaIds = await Items.GetItemDataAsync(this, itemId).ConfigureAwait(false);
-                    var metaStrings = await NameValues.GetMetadataValuesAsync(this, metaIds).ConfigureAwait(false);
-
-                    responses.Add(metaStrings);
-                }
-
-                GetResponse response = new GetResponse() { metadata = responses };
-                return response;
-            }
-            finally
-            {
-                ScopeTiming.RecordScope("Cmd.Get", totalTimer);
-            }
-        }
-
-        /// <summary>
-        /// Query for the metadata for a set of items.
-        /// </summary>
-        /// <param name="request">NoSQL query for items to get</param>
-        /// <returns>Metadata of found items</returns>
-        public async Task<GetResponse> QueryGetAsync(QueryGetRequest request)
-        {
-            var totalTimer = ScopeTiming.StartTiming();
-            try
-            {
-                var itemValues = new Dictionary<long, object>();
-                {
-                    Select select = new Select();
-                    select.select = new List<string> { "id", "value" };
-                    select.from = request.from;
-                    select.where = request.where;
-                    select.orderBy = request.orderBy;
-                    select.limit = request.limit;
-                    select.cmdParams = request.cmdParams;
-                    using (var reader = await this.ExecSelectAsync(select).ConfigureAwait(false))
-                    {
-                        while (await reader.ReadAsync().ConfigureAwait(false))
-                            itemValues.Add(reader.GetInt64(0), reader.GetValue(1));
-                    }
-                }
-
-                var responses = new List<Dictionary<string, object>>(itemValues.Count);
-                foreach (var itemId in itemValues.Keys)
-                {
-                    var metaIds = await Items.GetItemDataAsync(this, itemId).ConfigureAwait(false);
-                    var metaStrings = await NameValues.GetMetadataValuesAsync(this, metaIds).ConfigureAwait(false);
-
-                    metaStrings["id"] = (double)itemId;
-                    metaStrings["value"] = itemValues[itemId];
-
-                    responses.Add(metaStrings);
-                }
-
-                GetResponse response = new GetResponse() { metadata = responses };
-                return response;
-            }
-            finally
-            {
-                ScopeTiming.RecordScope("Cmd.QueryGet", totalTimer);
-            }
-        }
-
-        /// <summary>
         /// Delete a single item from a table.
         /// </summary>
         /// <param name="table">Table to delete from</param>
         /// <param name="value">Value of object to delete</param>
         public async Task DeleteAsync(string table, object value)
         {
-            await DeleteAsync(new Delete(table, value)).ConfigureAwait(false);
+            await DeleteAsync(table, new[]{ value }).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -361,30 +261,21 @@ namespace fourdb
         /// <param name="values">Values of objects to delete</param>
         public async Task DeleteAsync(string table, IEnumerable<object> values)
         {
-            await DeleteAsync(new Delete(table, values)).ConfigureAwait(false);
-        }
-
-        /// <summary>
-        /// Process a delete request.
-        /// </summary>
-        /// <param name="toDelete">Delete reqeuest</param>
-        public async Task DeleteAsync(Delete toDelete)
-        {
             var totalTimer = ScopeTiming.StartTiming();
             try
             {
-                int tableId = await Tables.GetIdAsync(this, toDelete.table, noCreate: true, noException: true).ConfigureAwait(false);
+                int tableId = await Tables.GetIdAsync(this, table, noCreate: true, noException: true).ConfigureAwait(false);
                 if (tableId < 0)
                     return;
 
-                foreach (var val in toDelete.values)
+                foreach (var val in values)
                 {
                     long valueId = await Values.GetIdAsync(this, val).ConfigureAwait(false);
                     string sql = $"DELETE FROM items WHERE valueid = {valueId} AND tableid = {tableId}";
-                    this.AddPostOp(sql);
+                    AddPostOp(sql);
                 }
 
-                await this.ProcessPostOpsAsync().ConfigureAwait(false);
+                await ProcessPostOpsAsync().ConfigureAwait(false);
             }
             finally
             {
@@ -407,10 +298,10 @@ namespace fourdb
                 if (tableId < 0)
                     return;
 
-                await this.Db.ExecuteSqlAsync($"DELETE FROM itemnamevalues WHERE nameid IN (SELECT id FROM names WHERE tableid = {tableId})").ConfigureAwait(false);
-                await this.Db.ExecuteSqlAsync($"DELETE FROM names WHERE tableid = {tableId}").ConfigureAwait(false);
-                await this.Db.ExecuteSqlAsync($"DELETE FROM items WHERE tableid = {tableId}").ConfigureAwait(false);
-                await this.Db.ExecuteSqlAsync($"DELETE FROM tables WHERE id = {tableId}").ConfigureAwait(false);
+                await Db.ExecuteSqlAsync($"DELETE FROM itemnamevalues WHERE nameid IN (SELECT id FROM names WHERE tableid = {tableId})").ConfigureAwait(false);
+                await Db.ExecuteSqlAsync($"DELETE FROM names WHERE tableid = {tableId}").ConfigureAwait(false);
+                await Db.ExecuteSqlAsync($"DELETE FROM items WHERE tableid = {tableId}").ConfigureAwait(false);
+                await Db.ExecuteSqlAsync($"DELETE FROM tables WHERE id = {tableId}").ConfigureAwait(false);
 
                 NameValues.ClearCaches();
             }
@@ -458,7 +349,7 @@ namespace fourdb
                 cmdParams.Add("@name", requestedTable);
 
             var responseDict = new ListDictionary<string, List<string>>();
-            using (var reader = await this.Db.ExecuteReaderAsync(sql, cmdParams).ConfigureAwait(false))
+            using (var reader = await Db.ExecuteReaderAsync(sql, cmdParams).ConfigureAwait(false))
             {
                 while (await reader.ReadAsync().ConfigureAwait(false))
                 {
@@ -498,7 +389,7 @@ namespace fourdb
             var totalTimer = ScopeTiming.StartTiming();
             try
             {
-                using (var msTrans = BeginTrans())
+                using (var msTrans = Db.BeginTrans())
                 {
                     foreach (string sql in m_postItemOps)
                         await Db.ExecuteSqlAsync(sql).ConfigureAwait(false);

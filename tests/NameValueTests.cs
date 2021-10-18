@@ -35,20 +35,6 @@ namespace fourdb
                 Assert.AreEqual(1, outMetaDict.Count);
                 Assert.IsTrue(outMetaDict.ContainsKey(fredNameId));
                 Assert.AreEqual(earnyValueId, outMetaDict[fredNameId]);
-
-                Define define = new Define("apelike", "foo");
-                define.Set("blet", "monkey").Set("something", "else");
-                ctxt.DefineAsync(define).Wait();
-
-                GetRequest get = new GetRequest() { table = "apelike" };
-                get.values = new List<object> { "foo" };
-                var gotten = ctxt.GetAsync(get).Result;
-
-                Assert.AreEqual(1, gotten.metadata.Count);
-
-                var result = gotten.metadata[0];
-                Assert.AreEqual("monkey", result["blet"]);
-                Assert.AreEqual("else", result["something"]);
             }
         }
     }
