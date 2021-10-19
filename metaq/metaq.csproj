@@ -2,11 +2,11 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>netcoreapp3.1</TargetFramework>
+    <TargetFramework>net5.0</TargetFramework>
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\4db\4db.csproj" />
+    <ProjectReference Include="..\4db.net\4db.net.csproj" />
   </ItemGroup>
 
 </Project>

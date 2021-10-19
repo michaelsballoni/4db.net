@@ -7,7 +7,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "metaq", "metaq\metaq.csproj
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "carsdb", "carsdb\carsdb.csproj", "{2F6C8839-99C5-4A97-A3A0-315DBCB36A36}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "4db", "4db\4db.csproj", "{B310CA99-C752-4A22-B13D-8E4CE603813C}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "4db", "4db.net\4db.net.csproj", "{B310CA99-C752-4A22-B13D-8E4CE603813C}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "tests", "tests\tests.csproj", "{15081802-1C3A-4660-817B-58017BB4FB7C}"
 EndProject

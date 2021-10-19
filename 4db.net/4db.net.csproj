@@ -10,7 +10,7 @@
     <PackageId>4db</PackageId>
     <Description>File-based, dynamic NoSQL database engine built on top of SQLite.  Includes automatic traditional and full-text indexing on all columns.</Description>
     <Copyright>2021</Copyright>
-    <PackageProjectUrl>https://github.com/michaelsballoni/4db</PackageProjectUrl>
+    <PackageProjectUrl>https://github.com/michaelsballoni/4db.net</PackageProjectUrl>
     <PackageLicenseExpression></PackageLicenseExpression>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
   </PropertyGroup>
