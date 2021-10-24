@@ -409,6 +409,11 @@ namespace fourdb
                 m_postItemOps = new List<string>();
             m_postItemOps.Add(sql);
         }
+        internal void ClearPostOps()
+        {
+            if (m_postItemOps != null)
+                m_postItemOps.Clear();
+        }
         private List<string> m_postItemOps;
 
         public static string DbConnStrToFilePath(string connStr)
