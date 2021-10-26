@@ -431,8 +431,16 @@ namespace fourdb
                             }
                             else
                             {
-                                wherePart += cleanName == "value" ? "i.valueid" : $"iv{cleanName}.valueid";
-                                wherePart += $" IN (SELECT bvt.valueid FROM bvaluetext AS bvt WHERE bvt.stringSearchValue MATCH {where.paramName})";
+                                string matchTableLabel = cleanName == "value" ? "bvtValue" : $"bvt{cleanName}";
+                                string matchColumnLabel = cleanName == "value" ? "i.valueid" : $"iv{cleanName}.valueid";
+                                
+                                fromPart += $" JOIN bvaluetext {matchTableLabel} ON {matchTableLabel}.valueid = {matchColumnLabel}";
+                                
+                                wherePart += $"{matchTableLabel}.stringSearchValue MATCH {where.paramName}";
+                                
+                                if (query.orderBy == null)
+                                    query.orderBy = new List<Order>();
+                                query.orderBy.Add(new Order() { field = "rank" });
                             }
                         }
                         else if (cleanName == "id")

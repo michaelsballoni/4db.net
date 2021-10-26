@@ -14,6 +14,8 @@ namespace fourdb
         {
             DbConn = new SQLiteConnection(dbConnStr);
             DbConn.Open();
+            DbConn.EnableExtensions(true);
+            DbConn.LoadExtension("SQLite.Interop.dll", "sqlite3_fts5_init");
         }
 
         public void Dispose()

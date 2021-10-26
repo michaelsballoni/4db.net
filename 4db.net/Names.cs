@@ -178,47 +178,6 @@ namespace fourdb
             return isNumeric;
         }
 
-        /// <summary>
-        /// Seed the cache with info for a set of name IDs
-        /// </summary>
-        /// <param name="ctxt">Database connection</param>
-        /// <param name="ids">Name IDs to cache the info of</param>
-        public static async Task CacheNamesAsync(Context ctxt, IEnumerable<int> ids)
-        {
-            var totalTimer = ScopeTiming.StartTiming();
-            try
-            {
-                var stillToGet = ids.Where(id => !sm_cacheBack.ContainsKey(id));
-                if (!stillToGet.Any())
-                    return;
-
-                var nameIdInPart = string.Join(",", stillToGet.Select(i => i.ToString()));
-                var sql = $"SELECT id, tableid, name, isNumeric FROM names WHERE id IN ({nameIdInPart})";
-                if (sql.Length > 1000 * 1000)
-                    throw new MetaStringsException("GetNames query exceeds SQL batch limit of 1M.  Use smaller batches of items.");
-
-                using (var reader = await ctxt.Db.ExecuteReaderAsync(sql).ConfigureAwait(false))
-                {
-                    while (await reader.ReadAsync().ConfigureAwait(false))
-                    {
-                        int id = reader.GetInt32(0);
-                        sm_cacheBack[id] = 
-                            new NameObj() 
-                            { 
-                                id = id, 
-                                tableId = reader.GetInt32(1), 
-                                name = reader.GetString(2),
-                                isNumeric = reader.GetBoolean(3)
-                            };
-                    }
-                }
-            }
-            finally
-            {
-                ScopeTiming.RecordScope("Names.CacheNames", totalTimer);
-            }
-        }
-
         internal static void ClearCaches()
         {
             sm_cache.Clear();

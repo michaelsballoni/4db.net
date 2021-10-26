@@ -1,8 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Collections.Concurrent;
 using System.Threading.Tasks;
-using System.Linq;
 
 namespace fourdb
 {
@@ -33,8 +31,7 @@ namespace fourdb
                     "CREATE INDEX idx_bvalues_prefix ON bvalues (stringValue, isNumeric, id)",
                     "CREATE INDEX idx_bvalues_number ON bvalues (numberValue, isNumeric, id)",
 
-                    "CREATE VIRTUAL TABLE bvaluetext USING fts4 " +
-                    "(valueid INTEGER, stringSearchValue TEXT)"
+                    "CREATE VIRTUAL TABLE bvaluetext USING fts5 (valueid, stringSearchValue)"
                 };
             }
         }
@@ -45,9 +42,6 @@ namespace fourdb
         /// <param name="ctxt">Object for interacting with the database</param>
         public static void Reset(Context ctxt)
         {
-            sm_cache.Clear();
-            sm_cacheBack.Clear();
-
             ctxt.Db.ExecuteSql("DELETE FROM bvalues");
             ctxt.Db.ExecuteSql("DELETE FROM bvaluetext");
         }
@@ -71,13 +65,6 @@ namespace fourdb
                     return -1;
 
                 long id = -1;
-                bool shouldCache = (value is string) || Convert.ToDouble(value) == Convert.ToInt64(value);
-                if (shouldCache)
-                {
-                    if (sm_cache.TryGetValue(value, out id))
-                        return id;
-                }
-
                 Exception lastExp = null;
                 for (int tryCount = 1; tryCount <= 3; ++tryCount)
                 {
@@ -97,11 +84,7 @@ namespace fourdb
                 }
 
                 if (id >= 0)
-                {
-                    if (shouldCache)
-                        sm_cache[value] = id;
                     return id;
-                }
 
                 throw new MetaStringsException("Values.GetId failed after a few retries", lastExp);
             }
@@ -179,10 +162,6 @@ namespace fourdb
             var totalTimer = ScopeTiming.StartTiming();
             try
             {
-                object objFromCache;
-                if (sm_cacheBack.TryGetValue(id, out objFromCache))
-                    return objFromCache;
-
                 string sql = $"SELECT isNumeric, numberValue, stringValue FROM bvalues WHERE id = {id}";
                 using (var reader = await ctxt.Db.ExecuteReaderAsync(sql).ConfigureAwait(false))
                 { 
@@ -194,7 +173,6 @@ namespace fourdb
                         toReturn = reader.GetDouble(1);
                     else
                         toReturn = reader.GetString(2);
-                    sm_cacheBack[id] = toReturn;
                     return toReturn;
                 }
             }
@@ -203,58 +181,5 @@ namespace fourdb
                 ScopeTiming.RecordScope("Values.GetValue", totalTimer);
             }
         }
-
-        /// <summary>
-        /// Pre-cache all values in given a set of MySQL table bvalues row IDs
-        /// </summary>
-        /// <param name="ctxt">Object for interacting with the database</param>
-        /// <param name="ids">MySQL table bvalues row IDs</param>
-        /// <returns></returns>
-        public static async Task CacheValuesAsync(Context ctxt, IEnumerable<long> ids)
-        {
-            var totalTimer = ScopeTiming.StartTiming();
-            try
-            {
-                var stillToGet = ids.Where(id => !sm_cacheBack.ContainsKey(id));
-                if (!stillToGet.Any())
-                    return;
-
-                var valueIdInPart = string.Join(",", stillToGet.Select(i => i.ToString()));
-                var sql = $"SELECT id, isNumeric, numberValue, stringValue FROM bvalues WHERE id IN ({valueIdInPart})";
-                if (sql.Length > 32 * 1024)
-                    throw new MetaStringsException("GetValues query exceeds SQL batch limit of 1M.  Use a smaller batch of items.");
-
-                using (var reader = await ctxt.Db.ExecuteReaderAsync(sql).ConfigureAwait(false))
-                {
-                    while (await reader.ReadAsync().ConfigureAwait(false))
-                    {
-                        long id = reader.GetInt64(0);
-
-                        bool isNumeric = reader.GetBoolean(1);
-
-                        object obj;
-                        if (isNumeric)
-                            obj = reader.GetDouble(2);
-                        else
-                            obj = reader.GetString(3);
-
-                        sm_cacheBack[id] = obj;
-                    }
-                }
-            }
-            finally
-            {
-                ScopeTiming.RecordScope("Values.CacheValues", totalTimer);
-            }
-        }
-
-        internal static void ClearCaches()
-        {
-            sm_cache.Clear();
-            sm_cacheBack.Clear();
-        }
-
-        private static ConcurrentDictionary<object, long> sm_cache = new ConcurrentDictionary<object, long>();
-        private static ConcurrentDictionary<long, object> sm_cacheBack = new ConcurrentDictionary<long, object>();
     }
 }

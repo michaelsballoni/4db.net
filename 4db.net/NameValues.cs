@@ -28,7 +28,6 @@ namespace fourdb
         /// </summary>
         public static void ClearCaches()
         {
-            Values.ClearCaches();
             Names.ClearCaches();
             Tables.ClearCaches();
         }
@@ -47,9 +46,6 @@ namespace fourdb
                 var retVal = new Dictionary<string, object>(ids.Count);
                 if (ids.Count == 0)
                     return retVal;
-
-                await Names.CacheNamesAsync(ctxt, ids.Keys).ConfigureAwait(false);
-                await Values.CacheValuesAsync(ctxt, ids.Values).ConfigureAwait(false);
 
                 foreach (var kvp in ids)
                 {
