@@ -7,7 +7,7 @@ using System.Linq;
 namespace fourdb
 {
     /// <summary>
-    /// API for turning SQL strings to and from NoSQL query objects
+    /// API for turning SQL strings to and from query objects
     /// </summary>
     public static class Sql
     {
@@ -243,21 +243,21 @@ namespace fourdb
         }
 
         /// <summary>
-        /// This is where the magic metastrings SQL => MySQL SQL conversion takes place
+        /// This is where the magic 4db query => Database SQL query conversion takes place
         /// </summary>
         /// <param name="ctxt">Database connection</param>
-        /// <param name="query">metastrings query</param>
-        /// <returns>MySQL SQL</returns>
+        /// <param name="query">4db SQL query</param>
+        /// <returns>Database SQL</returns>
         public static async Task<string> GenerateSqlAsync(Context ctxt, Select query)
         {
             //
             // "COMPILE"
             //
             if (string.IsNullOrWhiteSpace(query.from))
-                throw new MetaStringsException("Invalid query, FROM is missing");
+                throw new FourDbException("Invalid query, FROM is missing");
 
             if (query.select == null || query.select.Count == 0)
-                throw new MetaStringsException("Invalid query, SELECT is empty");
+                throw new FourDbException("Invalid query, SELECT is empty");
 
             if (query.orderBy != null)
             {
@@ -267,7 +267,7 @@ namespace fourdb
                     if (!query.select.Contains(orderField))
                     {
                         throw
-                            new MetaStringsException
+                            new FourDbException
                             (
                                 "Invalid query, ORDER BY columns must be present in SELECT column list: " +
                                 $"{order.field.Trim()}"

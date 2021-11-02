@@ -15,7 +15,7 @@ namespace fourdb
     }
 
     /// <summary>
-    /// metastrings implementation class for the columns in the virtual schema
+    /// Implementation class for the columns in the virtual schema
     /// </summary>
     public static class Names
     {
@@ -58,8 +58,8 @@ namespace fourdb
         /// <param name="name">What is the column name?</param>
         /// <param name="isNumeric">Is this column numeric or string?</param>
         /// <param name="noCreate">Should the command fail if no existing table matches?</param>
-        /// <param name="noException">Should -1 be returned on error instead of raising exception?</param>
-        /// <returns></returns>
+        /// <param name="noException">Should the command fail return -1 if name not found?</param>
+        /// <returns>Database row ID</returns>
         public static async Task<int> GetIdAsync(Context ctxt, int tableId, string name, bool isNumeric = false, bool noCreate = false, bool noException = false)
         {
             int id;
@@ -68,66 +68,46 @@ namespace fourdb
                 return id;
 
             if (!Utils.IsWord(name))
-                throw new MetaStringsException($"Names.GetId name is not valid: {name}");
+                throw new FourDbException($"Names.GetId name is not valid: {name}");
 
             if (Utils.IsNameReserved(name))
-                throw new MetaStringsException($"Names.GetId name is reserved: {name}");
+                throw new FourDbException($"Names.GetId name is reserved: {name}");
 
-            Exception lastExp = null;
-            bool isExpFinal = false;
-            for (int tryCount = 1; tryCount <= 4; ++tryCount)
+            Dictionary<string, object> cmdParams = new Dictionary<string, object>();
+            cmdParams.Add("@tableId", tableId);
+            cmdParams.Add("@name", name);
+            string selectSql =
+                "SELECT id FROM names WHERE tableid = @tableId AND name = @name";
+            object idObj = await ctxt.Db.ExecuteScalarAsync(selectSql, cmdParams).ConfigureAwait(false);
+            id = Utils.ConvertDbInt32(idObj);
+            if (id >= 0)
             {
-                try
-                {
-                    Dictionary<string, object> cmdParams = new Dictionary<string, object>();
-                    cmdParams.Add("@tableId", tableId);
-                    cmdParams.Add("@name", name);
-                    string selectSql =
-                        "SELECT id FROM names WHERE tableid = @tableId AND name = @name";
-                    object idObj = await ctxt.Db.ExecuteScalarAsync(selectSql, cmdParams).ConfigureAwait(false);
-                    id = Utils.ConvertDbInt32(idObj);
-                    if (id >= 0)
-                    {
-                        sm_cache[cacheKey] = id;
-                        return id;
-                    }
-
-                    if (noCreate)
-                    {
-                        if (noException)
-                            return -1;
-
-                        isExpFinal = true;
-                        throw new MetaStringsException($"Names.GetId cannot create new name: {name}", lastExp);
-                    }
-
-	                cmdParams.Add("@isNumeric", isNumeric);
-	                string insertSql =
-	                    "INSERT INTO names (tableid, name, isNumeric) VALUES (@tableId, @name, @isNumeric)";
-	                id = (int)await ctxt.Db.ExecuteInsertAsync(insertSql, cmdParams).ConfigureAwait(false);
-	                if (id >= 0)
-	                {
-	                    sm_cache[cacheKey] = id;
-	                    return id;
-	                }
-                }
-                catch (Exception exp)
-                {
-                    if (isExpFinal)
-                        throw exp;
-
-                    lastExp = exp;
-                }
+                sm_cache[cacheKey] = id;
+                return id;
             }
 
-            throw new MetaStringsException("Names.GetId fails after a few tries", lastExp);
-        }
+            if (noCreate)
+            {
+                if (noException)
+                    return -1;
+                else
+                    throw new FourDbException($"Names.GetId cannot find name: {name}");
+            }
+
+	        cmdParams.Add("@isNumeric", isNumeric);
+	        string insertSql =
+	            "INSERT INTO names (tableid, name, isNumeric) VALUES (@tableId, @name, @isNumeric)";
+	        id = (int)await ctxt.Db.ExecuteInsertAsync(insertSql, cmdParams).ConfigureAwait(false);
+	        
+            sm_cache[cacheKey] = id;
+	        return id;
+       }
 
         /// <summary>
         /// Given a name ID, get info about the name
         /// </summary>
         /// <param name="ctxt">Database connection</param>
-        /// <param name="id">Name database row ID</param>
+        /// <param name="id">Database row ID</param>
         /// <returns>Info about the name</returns>
         public static async Task<NameObj> GetNameAsync(Context ctxt, int id)
         {
@@ -142,7 +122,7 @@ namespace fourdb
             using (var reader = await ctxt.Db.ExecuteReaderAsync(sql).ConfigureAwait(false))
             {
                 if (!await reader.ReadAsync().ConfigureAwait(false))
-                    throw new MetaStringsException($"Names.GetName fails to find record: {id}");
+                    throw new FourDbException($"Names.GetName fails to find record: {id}");
 
                 obj = new NameObj()
                 {

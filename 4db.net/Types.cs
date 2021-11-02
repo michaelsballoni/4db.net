@@ -2,19 +2,15 @@
 
 namespace fourdb
 {
-    public class MetaStringsException : Exception
+    public class FourDbException : Exception
     {
-        public MetaStringsException(string msg) : base(msg) { }
-        public MetaStringsException(string msg, Exception innerExp) : base(msg, innerExp) { }
+        public FourDbException(string msg) : base(msg) { }
+        public FourDbException(string msg, Exception innerExp) : base(msg, innerExp) { }
     }
 
-    public class SqlException : MetaStringsException
+    public class SqlException : FourDbException
     {
-        public SqlException(string msg, string sql)  
-            : base(msg) 
-        {
-            Sql = sql;
-        }
+        public SqlException(string msg, string sql) : base(msg) { Sql = sql; }
 
         public string Sql { get; private set; }
     }

@@ -6,7 +6,7 @@ using System.Text;
 namespace fourdb
 {
     /// <summary>
-    /// Items are the rows in the metastrings schema
+    /// Items are the rows in the virtual schema
     /// </summary>
     public static class Items
     {
@@ -68,56 +68,37 @@ namespace fourdb
         /// <param name="ctxt">Database connection</param>
         /// <param name="tableId">The table ID</param>
         /// <param name="valueId">The value ID of the primary key</param>
-        /// <param name="noCreate">Whether to return -1 on error, or throw an exception</param>
-        /// <returns></returns>
+        /// <param name="noCreate">Whether to return -1 on error</param>
+        /// <returns>Database row ID</returns>
         public static async Task<long> GetIdAsync(Context ctxt, int tableId, long valueId, bool noCreate = false)
         {
-            var totalTimer = ScopeTiming.StartTiming();
-            try
-            {
-                Exception lastExp = null;
-                var cmdParams =
-                    new Dictionary<string, object>
-                    {
-                                { "@tableId", tableId },
-                                { "@valueId", valueId }
-                    };
-                for (int tryCount = 1; tryCount <= 4; ++tryCount)
+            var cmdParams =
+                new Dictionary<string, object>
                 {
-                    try
-                    {
-                        string selectSql = "SELECT id FROM items WHERE tableId = @tableId AND valueId = @valueId";
-                        object idObj = await ctxt.Db.ExecuteScalarAsync(selectSql, cmdParams).ConfigureAwait(false);
-                        long id = Utils.ConvertDbInt64(idObj);
-                        if (noCreate && id < 0)
-                            return -1;
-                        else if (id >= 0)
-                            return id;
+                    { "@tableId", tableId },
+                    { "@valueId", valueId }
+                };
+            string selectSql = "SELECT id FROM items WHERE tableId = @tableId AND valueId = @valueId";
+            object idObj = await ctxt.Db.ExecuteScalarAsync(selectSql, cmdParams).ConfigureAwait(false);
+            long id = Utils.ConvertDbInt64(idObj);
+            
+            if (noCreate && id < 0)
+                return -1;
+            else if (id >= 0)
+                return id;
 
-                        string insertSql = $"{ctxt.Db.InsertIgnore} items (tableid, valueid, created, lastmodified) " +
-                                            $"VALUES (@tableId, @valueId, {ctxt.Db.UtcTimestampFunction}, {ctxt.Db.UtcTimestampFunction})";
-                        id = await ctxt.Db.ExecuteInsertAsync(insertSql, cmdParams).ConfigureAwait(false);
-                    }
-                    catch (Exception exp)
-                    {
-                        lastExp = exp;
-                    }
-                }
-
-                throw new MetaStringsException("Items.GetId failed after a few tries", lastExp);
-            }
-            finally
-            {
-                ScopeTiming.RecordScope("Items.GetId", totalTimer);
-            }
+            string insertSql = $"{ctxt.Db.InsertIgnore} items (tableid, valueid, created, lastmodified) " +
+                                $"VALUES (@tableId, @valueId, {ctxt.Db.UtcTimestampFunction}, {ctxt.Db.UtcTimestampFunction})";
+            id = await ctxt.Db.ExecuteInsertAsync(insertSql, cmdParams).ConfigureAwait(false);
+            return id;
         }
 
         /// <summary>
-        /// Given an item ID, get the name=>value metadata for the item
+        /// Given an item ID, get the name-to-value metadata for the item
         /// </summary>
         /// <param name="ctxt">Database connection</param>
         /// <param name="itemId">The item to get metadat for</param>
-        /// <returns></returns>
+        /// <returns>name_id-to-value_id mapping</returns>
         public static async Task<Dictionary<int, long>> GetItemDataAsync(Context ctxt, long itemId)
         {
             var retVal = new Dictionary<int, long>();
@@ -136,10 +117,10 @@ namespace fourdb
         /// <param name="ctxt">Database connection</param>
         /// <param name="itemId">The item to add metadata to</param>
         /// <param name="itemData">The name=>value ID metadata</param>
-        public static void SetItemData(Context ctxt, long itemId, Dictionary<int, long> itemData)
+        public static async Task SetItemDataAsync(Context ctxt, long itemId, Dictionary<int, long> itemData)
         {
             string updateSql = $"UPDATE items SET lastmodified = {ctxt.Db.UtcTimestampFunction} WHERE id = {itemId}";
-            ctxt.AddPostOp(updateSql);
+            await ctxt.RunSqlAsync(updateSql).ConfigureAwait(false);
 
             foreach (var kvp in itemData)
             {
@@ -153,8 +134,10 @@ namespace fourdb
                         $"DO UPDATE SET valueid = {kvp.Value}";
                 }
                 else // remove it
+                {
                     sql = $"DELETE FROM itemnamevalues WHERE itemid = {itemId} AND nameid = {kvp.Key}";
-                ctxt.AddPostOp(sql);
+                }
+                await ctxt.RunSqlAsync(sql).ConfigureAwait(false);
             }
         }
 
@@ -170,7 +153,7 @@ namespace fourdb
         }
 
         /// <summary>
-        /// Internal use, get a summary of an item and its metadata
+        /// Get a summary of an item and its metadata
         /// </summary>
         /// <param name="ctxt">Database connection</param>
         /// <param name="itemId">The item to summarize</param>
@@ -184,7 +167,7 @@ namespace fourdb
             int tableId =
                 Utils.ConvertDbInt32(await ctxt.Db.ExecuteScalarAsync($"SELECT tableid FROM items WHERE id = {itemId}"));
             if (tableId < 0)
-                throw new MetaStringsException("Item not found: " + itemId);
+                throw new FourDbException("Item not found: " + itemId);
 
             string tableName = (await Tables.GetTableAsync(ctxt, tableId)).name;
             sb.AppendLine($"Table: {tableName} ({tableId})");

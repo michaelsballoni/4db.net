@@ -7,7 +7,7 @@ namespace fourdb
 {
     /// <summary>
     /// Generic database type
-    /// Useful when working with MySQL vs. SQLite
+    /// Useful when working with SQLite and...?
     /// </summary>
     public interface IDb : IDisposable
     {

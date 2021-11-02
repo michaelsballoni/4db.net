@@ -6,7 +6,7 @@ using System.Text.RegularExpressions;
 namespace fourdb
 {
     /// <summary>
-    /// Utility functions for implementing metastrings
+    /// Utility functions that implement the library
     /// </summary>
     public static class Utils
     {
@@ -136,7 +136,7 @@ namespace fourdb
         }
 
         /// <summary>
-        /// Is a name something used internally by metastrings?
+        /// Is a name something used internally?
         /// </summary>
         public static bool IsNameReserved(string name)
         {

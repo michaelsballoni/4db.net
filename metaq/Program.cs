@@ -89,9 +89,9 @@ namespace fourdb
                 {
                     WriteLine($"SQL EXCEPTION: {exp.Message}");
                 }
-                catch (MetaStringsException exp)
+                catch (FourDbException exp)
                 {
-                    WriteLine($"metastrings EXCEPTION: {exp.Message}");
+                    WriteLine($"4db EXCEPTION: {exp.Message}");
                 }
                 catch (Exception exp)
                 {

@@ -28,8 +28,7 @@ namespace fourdb
                 int fredNameId = Names.GetIdAsync(ctxt, tableId, "fred").Result;
                 long earnyValueId = Values.GetIdAsync(ctxt, "earny").Result;
                 metaDict[fredNameId] = earnyValueId;
-                Items.SetItemData(ctxt, itemId2, metaDict);
-                ctxt.ProcessPostOpsAsync().Wait();
+                Items.SetItemDataAsync(ctxt, itemId2, metaDict).Wait();
 
                 var outMetaDict = Items.GetItemDataAsync(ctxt, itemId2).Result;
                 Assert.AreEqual(1, outMetaDict.Count);

@@ -10,13 +10,14 @@ namespace fourdb
     /// <summary>
     /// Context manages the database connection
     /// and provides useful query helper functions
+    /// and implements the application-level functionality
     /// </summary>
     public class Context : IDisposable
     {
         /// <summary>
         /// Create a context for a database connection
         /// </summary>
-        /// <param name="dbConnStr">Database connection string...we're out of the config business</param>
+        /// <param name="dbConnStr">Database connection string</param>
         public Context(string dbConnStr)
         {
             string dbFilePath = DbConnStrToFilePath(dbConnStr);
@@ -30,11 +31,11 @@ namespace fourdb
 
                     using (var db = new SqlLiteDb(actualDbConnStr))
                     {
-                        RunSql(db, Tables.CreateSql);
-                        RunSql(db, Names.CreateSql);
-                        RunSql(db, Values.CreateSql);
-                        RunSql(db, Items.CreateSql);
-                        RunSql(db, new[] { "PRAGMA journal_mode = WAL", "PRAGMA synchronous = NORMAL" });
+                        RunSqls(db, Tables.CreateSql);
+                        RunSqls(db, Names.CreateSql);
+                        RunSqls(db, Values.CreateSql);
+                        RunSqls(db, Items.CreateSql);
+                        RunSqls(db, new[] { "PRAGMA journal_mode = WAL", "PRAGMA synchronous = NORMAL" });
                     }
                 }
             }
@@ -49,9 +50,6 @@ namespace fourdb
                 Db.Dispose();
                 Db = null;
             }
-
-            if (m_postItemOps != null && m_postItemOps.Count > 0)
-                throw new MetaStringsException("Post ops remain; call ProcessPostOpsAsync before disposing the metastrings context");
         }
 
         /// <summary>
@@ -112,7 +110,8 @@ namespace fourdb
         }
 
         /// <summary>
-        /// Query helper to get a dictionary of results from a single-column query
+        /// Query helper to get a dictionary of results from a two-column query
+        /// NOTE: ListDictionary is used to preserve the ordering of the query results
         /// </summary>
         /// <param name="select">Query to execute</param>
         /// <returns>ListDictionary of results of type K, V</returns>
@@ -163,89 +162,58 @@ namespace fourdb
         /// <param name="define">Info about metadata to apply to the key</param>
         public async Task DefineAsync(Define define)
         {
-            var totalTimer = ScopeTiming.StartTiming();
-            try
+            bool isKeyNumeric = !(define.key is string);
+            int tableId = await Tables.GetIdAsync(this, define.table, isKeyNumeric).ConfigureAwait(false);
+            long valueId = await Values.GetIdAsync(this, define.key).ConfigureAwait(false);
+            long itemId = await Items.GetIdAsync(this, tableId, valueId).ConfigureAwait(false);
+
+            if (define.metadata != null)
             {
-                var localTimer = ScopeTiming.StartTiming();
-
-                bool isKeyNumeric = !(define.key is string);
-                int tableId = await Tables.GetIdAsync(this, define.table, isKeyNumeric).ConfigureAwait(false);
-                long valueId = await Values.GetIdAsync(this, define.key).ConfigureAwait(false);
-                long itemId = await Items.GetIdAsync(this, tableId, valueId).ConfigureAwait(false);
-                ScopeTiming.RecordScope("Define.Setup", localTimer);
-
-                if (define.metadata != null)
+                // name => nameid
+                var nameValueIds = new Dictionary<int, long>();
+                foreach (var kvp in define.metadata)
                 {
-                    // name => nameid
-                    var nameValueIds = new Dictionary<int, long>();
-                    foreach (var kvp in define.metadata)
+                    bool isMetadataNumeric = !(kvp.Value is string);
+                    int nameId = await Names.GetIdAsync(this, tableId, kvp.Key, isMetadataNumeric).ConfigureAwait(false);
+                    if (kvp.Value == null) // erase value
                     {
-                        bool isMetadataNumeric = !(kvp.Value is string);
-                        int nameId = await Names.GetIdAsync(this, tableId, kvp.Key, isMetadataNumeric).ConfigureAwait(false);
-                        if (kvp.Value == null) // erase value
-                        {
-                            nameValueIds[nameId] = -1;
-                            continue;
-                        }
-                        bool isNameNumeric = await Names.GetNameIsNumericAsync(this, nameId).ConfigureAwait(false);
-                        bool isValueNumeric = !(kvp.Value is string);
-                        if (isValueNumeric != isNameNumeric)
-                        {
-                            throw
-                                new MetaStringsException
-                                (
-                                    $"Data numeric does not match name: {kvp.Key}" +
-                                    $"\n - value is numeric: {isValueNumeric} - {kvp.Value}" +
-                                    $"\n - name is numeric: {isNameNumeric}"
-                                );
-                        }
-                        nameValueIds[nameId] =
-                            await Values.GetIdAsync(this, kvp.Value).ConfigureAwait(false);
+                        nameValueIds[nameId] = -1;
+                        continue;
                     }
-                    ScopeTiming.RecordScope("Define.NameIds", localTimer);
-
-                    Items.SetItemData(this, itemId, nameValueIds);
-                    ScopeTiming.RecordScope("Define.ItemsCommit", localTimer);
+                    bool isNameNumeric = await Names.GetNameIsNumericAsync(this, nameId).ConfigureAwait(false);
+                    bool isValueNumeric = !(kvp.Value is string);
+                    if (isValueNumeric != isNameNumeric)
+                    {
+                        throw
+                            new FourDbException
+                            (
+                                $"Data numeric does not match name: {kvp.Key}" +
+                                $"\n - value is numeric: {isValueNumeric} - {kvp.Value}" +
+                                $"\n - name is numeric: {isNameNumeric}"
+                            );
+                    }
+                    nameValueIds[nameId] =
+                        await Values.GetIdAsync(this, kvp.Value).ConfigureAwait(false);
                 }
 
-                await ProcessPostOpsAsync().ConfigureAwait(false);
-                ScopeTiming.RecordScope("Define.PostOps", localTimer);
-            }
-#if !DEBUG
-            catch
-            {
-                ClearPostOps();
-                throw;
-            }
-#endif
-            finally
-            {
-                ScopeTiming.RecordScope("Define", totalTimer);
+                await Items.SetItemDataAsync(this, itemId, nameValueIds).ConfigureAwait(false);
             }
         }
 
         /// <summary>
         /// Generate SQL query given a Select object
-        /// This is where the metastrings -> SQL magic happens
+        /// This is where the 4db -> SQL magic happens
         /// </summary>
         /// <param name="query">NoSQL query object</param>
         /// <returns>SQL query</returns>
         public async Task<string> GenerateSqlAsync(Select query)
         {
-            var totalTimer = ScopeTiming.StartTiming();
-            try
-            {
-                string sql = await Sql.GenerateSqlAsync(this, query).ConfigureAwait(false);
-                return sql;
-            }
-            finally
-            {
-                ScopeTiming.RecordScope("Cmd.GenerateSql", totalTimer);
-            }
+            string sql = await Sql.GenerateSqlAsync(this, query).ConfigureAwait(false);
+            return sql;
         }
 
         /// <summary>
-        /// Delete a single item from a table.
+        /// Delete a single item from a table
         /// </summary>
         /// <param name="table">Table to delete from</param>
         /// <param name="value">Value of object to delete</param>
@@ -255,32 +223,24 @@ namespace fourdb
         }
 
         /// <summary>
-        /// Delete multiple items from a table.
+        /// Delete multiple items from a table
         /// </summary>
         /// <param name="table">Table to delete from</param>
         /// <param name="values">Values of objects to delete</param>
         public async Task DeleteAsync(string table, IEnumerable<object> values)
         {
-            var totalTimer = ScopeTiming.StartTiming();
-            try
-            {
-                int tableId = await Tables.GetIdAsync(this, table, noCreate: true, noException: true).ConfigureAwait(false);
-                if (tableId < 0)
-                    return;
+            int tableId = await Tables.GetIdAsync(this, table, noCreate: true, noException: true).ConfigureAwait(false);
+            if (tableId < 0)
+                return;
 
-                foreach (var val in values)
-                {
-                    long valueId = await Values.GetIdAsync(this, val).ConfigureAwait(false);
-                    string sql = $"DELETE FROM items WHERE valueid = {valueId} AND tableid = {tableId}";
-                    AddPostOp(sql);
-                }
-
-                await ProcessPostOpsAsync().ConfigureAwait(false);
-            }
-            finally
+            var sqls = new List<string>();
+            foreach (var val in values)
             {
-                ScopeTiming.RecordScope("Cmd.Delete", totalTimer);
+                long valueId = await Values.GetIdAsync(this, val).ConfigureAwait(false);
+                string sql = $"DELETE FROM items WHERE valueid = {valueId} AND tableid = {tableId}";
+                sqls.Add(sql);
             }
+            RunSqls(Db, sqls);
         }
 
         /// <summary>
@@ -289,33 +249,24 @@ namespace fourdb
         /// <param name="table">Name of table to drop</param>
         public async Task DropAsync(string table)
         {
-            var totalTimer = ScopeTiming.StartTiming();
-            try
-            {
-                NameValues.ClearCaches();
+            NameValues.ClearCaches();
 
-                int tableId = await Tables.GetIdAsync(this, table, noCreate: true, noException: true).ConfigureAwait(false);
-                if (tableId < 0)
-                    return;
+            int tableId = await Tables.GetIdAsync(this, table, noCreate: true, noException: true).ConfigureAwait(false);
+            if (tableId < 0)
+                return;
 
-                await Db.ExecuteSqlAsync($"DELETE FROM itemnamevalues WHERE nameid IN (SELECT id FROM names WHERE tableid = {tableId})").ConfigureAwait(false);
-                await Db.ExecuteSqlAsync($"DELETE FROM names WHERE tableid = {tableId}").ConfigureAwait(false);
-                await Db.ExecuteSqlAsync($"DELETE FROM items WHERE tableid = {tableId}").ConfigureAwait(false);
-                await Db.ExecuteSqlAsync($"DELETE FROM tables WHERE id = {tableId}").ConfigureAwait(false);
+            await Db.ExecuteSqlAsync($"DELETE FROM itemnamevalues WHERE nameid IN (SELECT id FROM names WHERE tableid = {tableId})").ConfigureAwait(false);
+            await Db.ExecuteSqlAsync($"DELETE FROM names WHERE tableid = {tableId}").ConfigureAwait(false);
+            await Db.ExecuteSqlAsync($"DELETE FROM items WHERE tableid = {tableId}").ConfigureAwait(false);
+            await Db.ExecuteSqlAsync($"DELETE FROM tables WHERE id = {tableId}").ConfigureAwait(false);
 
-                NameValues.ClearCaches();
-            }
-            finally
-            {
-                ScopeTiming.RecordScope("Cmd.Drop", totalTimer);
-            }
+            NameValues.ClearCaches();
         }
 
         /// <summary>
-        /// Reset the metastrings database
-        /// Only used internally for testing, should not be used in a production environment
+        /// Reset the database
         /// </summary>
-        /// <param name="reset">Reset request object</param>
+        /// <param name="includeNameValues">true to wipe everything, false only table rows</param>
         public void Reset(bool includeNameValues = false)
         {
             if (includeNameValues)
@@ -327,7 +278,7 @@ namespace fourdb
         }
 
         /// <summary>
-        /// Get the schema of a metastrings database
+        /// Get the schema of a virtual database
         /// </summary>
         /// <param name="table">Name of table to get the schema of</param>
         /// <returns>Schema object</returns>
@@ -372,50 +323,22 @@ namespace fourdb
         /// This is usually unnecessary as tables are created as referred to by Define.
         /// </summary>
         /// <param name="name">Table name to create request</param>
+        /// <param name="isNumeric">Is the primary key of the table a number?</param>
         public async Task CreateTableAsync(string name, bool isNumeric)
         {
             await Tables.GetIdAsync(this, name, isNumeric).ConfigureAwait(false);
         }
 
         /// <summary>
-        /// Process queries that piled up by Command's Define function
-        /// This is the rare case where using a transaction is well-advised
+        /// Run a SQL statement
         /// </summary>
-        public async Task ProcessPostOpsAsync()
+        /// <param name="sql">Query to run</param>
+        public async Task RunSqlAsync(string sql)
         {
-            if (m_postItemOps == null || m_postItemOps.Count == 0)
-                return;
-
-            var totalTimer = ScopeTiming.StartTiming();
-            try
-            {
-                using (var msTrans = Db.BeginTrans())
-                {
-                    foreach (string sql in m_postItemOps)
-                        await Db.ExecuteSqlAsync(sql).ConfigureAwait(false);
-                    msTrans.Commit();
-                }
-            }
-            finally
-            {
-                m_postItemOps.Clear();
-                ScopeTiming.RecordScope("ProcessItemPostOps", totalTimer);
-            }
+            await Db.ExecuteSqlAsync(sql).ConfigureAwait(false);
         }
 
-        internal void AddPostOp(string sql)
-        {
-            if (m_postItemOps == null)
-                m_postItemOps = new List<string>();
-            m_postItemOps.Add(sql);
-        }
-        internal void ClearPostOps()
-        {
-            if (m_postItemOps != null)
-                m_postItemOps.Clear();
-        }
-        private List<string> m_postItemOps;
-
+        // NOTE: Only public for unit tests
         public static string DbConnStrToFilePath(string connStr)
         {
             string filePath = connStr;
@@ -434,7 +357,7 @@ namespace fourdb
             return filePath;
         }
 
-        private static void RunSql(IDb db, string[] sqlQueries)
+        private static void RunSqls(IDb db, IEnumerable<string> sqlQueries)
         {
             foreach (string sql in sqlQueries)
                 db.ExecuteSql(sql);

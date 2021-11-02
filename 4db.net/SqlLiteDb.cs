@@ -8,6 +8,10 @@ using System.Data.SQLite;
 
 namespace fourdb
 {
+    /// <summary>
+    /// Database interop class for SQLite
+    /// First, there was MySQL...!?!?
+    /// </summary>
     public class SqlLiteDb : IDb
     {
         public SqlLiteDb(string dbConnStr)

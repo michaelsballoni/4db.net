@@ -7,7 +7,7 @@ namespace fourdb
     {
         public static Context GetCtxt() // start from scratch
         {
-            string dbFilePath = Context.DbConnStrToFilePath("Data Source=[UserRoaming]/metastrings-tests.db");
+            string dbFilePath = Context.DbConnStrToFilePath("Data Source=[UserRoaming]/fourdb-tests.db");
             if (File.Exists(dbFilePath))
                 File.Delete(dbFilePath);
 

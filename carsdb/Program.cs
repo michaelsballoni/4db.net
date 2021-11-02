@@ -6,7 +6,7 @@ using System.IO;
 namespace fourdb
 {
     /// <summary>
-    /// This program demostrate creating a NoSQL database and using all four of the metastrings commands
+    /// This program demonstrates creating a NoSQL database and using all four of the supported commands
     /// to populate and manipulate a cars database.
     /// 1. UPSERT
     /// 2. SELECT

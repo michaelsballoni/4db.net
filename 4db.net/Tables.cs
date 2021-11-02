@@ -13,7 +13,7 @@ namespace fourdb
     }
 
     /// <summary>
-    /// metastrings implementation class for the tables in the virtual schema
+    /// Implementation class for the tables in the virtual schema
     /// </summary>
     public static class Tables
     {
@@ -60,10 +60,10 @@ namespace fourdb
                 return id;
 
             if (!Utils.IsWord(name))
-                throw new MetaStringsException($"Types.GetId name is not valid: {name}");
+                throw new FourDbException($"Types.GetId name is not valid: {name}");
 
             if (Utils.IsNameReserved(name))
-                throw new MetaStringsException($"Types.GetId name is reserved: {name}");
+                throw new FourDbException($"Types.GetId name is reserved: {name}");
 
             Exception lastExp = null;
             bool isExpFinal = false;
@@ -88,7 +88,7 @@ namespace fourdb
                             return -1;
 
                         isExpFinal = true;
-                        throw new MetaStringsException($"Tables.GetId cannot create new table: {name}", lastExp);
+                        throw new FourDbException($"Tables.GetId cannot create new table: {name}", lastExp);
                     }
 
                     cmdParams.Add("@isNumeric", isNumeric);
@@ -106,7 +106,7 @@ namespace fourdb
                 }
             }
 
-            throw new MetaStringsException("Tables.GetId fails after a few tries", lastExp);
+            throw new FourDbException("Tables.GetId fails after a few tries", lastExp);
         }
 
         /// <summary>
@@ -128,7 +128,7 @@ namespace fourdb
             using (var reader = await ctxt.Db.ExecuteReaderAsync(sql).ConfigureAwait(false))
             {
                 if (!await reader.ReadAsync().ConfigureAwait(false))
-                    throw new MetaStringsException($"Tables.GetTable fails to find record: {id}");
+                    throw new FourDbException($"Tables.GetTable fails to find record: {id}");
 
                 obj =
                     new TableObj()
