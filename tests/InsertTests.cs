@@ -15,21 +15,33 @@ namespace fourdb
             using (var ctxt = TestUtils.GetCtxt())
             {
                 {
-                    var define = new Define("fun", "some");
-                    define.Set("num", 42).Set("str", "foobar").Set("multi", "blet\nmonkey");
-                    ctxt.DefineAsync(define).Wait();
+                    var metadata = new Dictionary<string, object>
+                    {
+                        { "num", 42 },
+                        { "str", "foobar" },
+                        { "multi", "blet\nmonkey" }
+                    };
+                    ctxt.DefineAsync("fun", "some", metadata).Wait();
                 }
 
                 {
-                    var define = new Define("fun", "another");
-                    define.Set("num", 69).Set("str", "boofar").Set("multi", "ape\nagony");
-                    ctxt.DefineAsync(define).Wait();
+                    var metadata = new Dictionary<string, object>
+                    {
+                        { "num", 69 },
+                        { "str", "boofar" },
+                        { "multi", "ape\nagony" }
+                    };
+                    ctxt.DefineAsync("fun", "another", metadata).Wait();
                 }
 
                 {
-                    var define = new Define("fun", "yetsome");
-                    define.Set("num", 19).Set("str", "playful").Set("multi", "balloni\nbeats");
-                    ctxt.DefineAsync(define).Wait();
+                    var metadata = new Dictionary<string, object>
+                    {
+                        { "num", 19 },
+                        { "str", "playful" },
+                        { "multi", "balloni\nbeats" }
+                    };
+                    ctxt.DefineAsync("fun", "yetsome", metadata).Wait();
                 }
 
                 long itemId = Items.GetIdAsync(ctxt, Tables.GetIdAsync(ctxt, "fun").Result, Values.GetIdAsync(ctxt, "some").Result).Result;
@@ -65,11 +77,12 @@ namespace fourdb
                 }
 
                 {
-                    Define define = new Define("fun", "some");
-                    define.Set("num", 43.0);
-                    define.Set("str", null); // remove the metadata
-
-                    ctxt.DefineAsync(define).Wait();
+                    var metadata = new Dictionary<string, object>
+                    {
+                        { "num", 43.0 },
+                        { "str", null } // remove the metadata
+                    };
+                    ctxt.DefineAsync("fun", "some", metadata).Wait();
                 }
 
                 itemData = NameValues.GetMetadataValuesAsync(ctxt, Items.GetItemDataAsync(ctxt, itemId).Result).Result;
@@ -93,14 +106,23 @@ namespace fourdb
                 }
 
                 {
-                    Define numsFirst = new Define("numsFirst", 1);
-                    numsFirst.Set("foo", 12);
-                    numsFirst.Set("blet", "79");
-                    ctxt.DefineAsync(numsFirst).Wait();
+                    {
+                        var metadata = new Dictionary<string, object>
+                        {
+                            { "foo", 12 },
+                            { "blet", "79" }
+                        };
+                        ctxt.DefineAsync("numsFirst", 1, metadata).Wait();
+                    }
 
-                    Define numsNext = new Define("numsFirst", 2);
-                    numsNext.Set("foo", 15).Set("blet", "63");
-                    ctxt.DefineAsync(numsNext).Wait();
+                    {
+                        var metadata = new Dictionary<string, object>
+                        {
+                            { "foo", 15 },
+                            { "blet", "63" }
+                        };
+                        ctxt.DefineAsync("numsFirst", 2, metadata).Wait();
+                    }
 
                     Select select = Sql.Parse("SELECT value, foo, blet\nFROM numsFirst");
                     using (var reader = ctxt.ExecSelectAsync(select).Result)

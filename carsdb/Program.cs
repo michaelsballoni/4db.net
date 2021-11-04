@@ -7,7 +7,7 @@ namespace fourdb
 {
     /// <summary>
     /// This program demonstrates creating a NoSQL database and using all four of the supported commands
-    /// to populate and manipulate a cars database.
+    /// to populate and manipulate a database storing a catalog of cars.
     /// 1. UPSERT
     /// 2. SELECT
     /// 3. DELETE
@@ -18,19 +18,18 @@ namespace fourdb
         static async Task Main()
         {
             // 4db is built on SQLite, so to create a 4db database
-            // we simply need to specify the location for the database file.
-            // If the file does not exist, an empty database is automatically created.
+            // we simply need to specify the location of the database file;
+            // if the file does not exist, an empty database is automatically created.
             // The Context class manages the SQLite database connection,
             // provides many useful functions for executing SELECT queries,
-            // and provides access to the Command class for UPSERT, DELETE, and DROP.
+            // and implements the UPSERT, DELETE, and DROP functions.
             using (var ctxt = new Context("cars.db"))
             {
                 // Pass our Context into AddCarAsync to add database records...so many cars...
                 Console.WriteLine("Adding cars...");
-                await AddCarAsync(ctxt, 1983, "Toyota", "Tercel");
+                await AddCarAsync(ctxt, 1987, "Nissan", "Pathfinder");
                 await AddCarAsync(ctxt, 1998, "Toyota", "Tacoma");
                 await AddCarAsync(ctxt, 2001, "Nissan", "Xterra");
-                await AddCarAsync(ctxt, 1987, "Nissan", "Pathfinder");
                 //...
 
                 // Select data out of the database using a basic dialect of SQL
@@ -55,11 +54,10 @@ namespace fourdb
                 select.AddParam("@year", 1990);
                 using (var reader = await ctxt.ExecSelectAsync(select))
                 {
-                    // The reader handed back is a System.Data.Common.DbDataReader,
-                    // straight out of SQLite.
+                    // NOTE: reader is a System.Data.Common.DbDataReader straight out of SQLite
                     while (reader.Read())
                     {
-                        // Collect the row ID GUID that AddCarAsync added.
+                        // Collect the row ID GUID that AddCarAsync added
                         oldCarGuids.Add(reader.GetString(0));
 
                         // 4db values are either numbers (doubles) or strings
@@ -84,7 +82,6 @@ namespace fourdb
             }
         }
 
-        // Given info about a car, add it to the database using the Context object and a Define
         /// <summary>
         /// UPSERT a car into our database
         /// </summary>
@@ -92,23 +89,27 @@ namespace fourdb
         /// <param name="year">The year of the car</param>
         /// <param name="make">The make of the car</param>
         /// <param name="model">The model of the car</param>
-        /// <returns></returns>
         static async Task AddCarAsync(Context ctxt, int year, string make, string model)
         {
-            // The Define class is used to do UPSERTs.
-            // You pass the table name and primary key value to the constructor.
+            // The Define function is used to do UPSERTs.
+            // You pass the table name, primary key value, and column data.
             // No need to create tables, just refer to them and the database takes care of it.
-            // The second parameter to the Define constructor is the row ID.
-            // This would be a natural primary key, but lacking that we use a GUID.
-            Define define = new Define("cars", Guid.NewGuid().ToString());
-
-            // Use Define.Set function to add column data
-            define.Set("year", year);
-            define.Set("make", make);
-            define.Set("model", model);
-
-            // Call through the Context to create a Command and do the UPSERT
-            await ctxt.DefineAsync(define);
+            // The second parameter to the Define function is the row ID.
+            // There's no obvious primary key so we use a GUID.
+            // We collect our column data in a simple Dictionary.
+            // NOTE: The primary key value and column data values
+            //       can only be strings or numbers.
+            //       For numbers, they have to be convertible to doubles,
+            //       and tolerated when selected out and returned as doubles.
+            string tableName = "cars";
+            object primaryKey = Guid.NewGuid().ToString();
+            var columnData = new Dictionary<string, object>
+            {
+                { "year", year },
+                { "make", make },
+                { "model", model },
+            };
+            await ctxt.DefineAsync(tableName, primaryKey, columnData);
         }
     }
 }

@@ -3,33 +3,6 @@ using System.Collections.Generic;
 
 namespace fourdb
 {
-    public class Define
-    {
-        public string table { get; set; }
-        public object key { get; set; }
-        public Dictionary<string, object> metadata { get; set; } = new Dictionary<string, object>();
-
-        public Define() { }
-
-        public Define(string table, object key)
-        {
-            this.table = table;
-            this.key = key;
-        }
-
-        public Define Set(string metadataName, object metadataValue)
-        {
-            metadata[metadataName] = metadataValue;
-            return this;
-        }
-
-        public object this[string name]
-        {
-            get { return metadata[name]; }
-            set { metadata[name] = value; }
-        }
-    }
-
     public class Criteria // WHERE
     {
         public string name { get; set; }

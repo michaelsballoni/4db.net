@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -21,16 +22,14 @@ namespace fourdb
 
                 // Add a row.
                 {
-                    var define = new Define("somethin", "foo");
-                    define.Set("blet", "monkey");
-                    ctxt.DefineAsync(define).Wait();
+                    var metadata = new Dictionary<string, object> { { "blet", "monkey" } };
+                    ctxt.DefineAsync("somethin", "foo", metadata).Wait();
                 }
 
                 // Add another row.
                 {
-                    var define = new Define("somethin", "bar");
-                    define.Set("flub", "snake");
-                    ctxt.DefineAsync(define).Wait();
+                    var metadata = new Dictionary<string, object> { { "flub", "snake" } };
+                    ctxt.DefineAsync("somethin", "bar", metadata).Wait();
                 }
 
                 // Have a table now, but bogus SELECT column

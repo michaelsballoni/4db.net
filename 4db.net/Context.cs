@@ -157,21 +157,23 @@ namespace fourdb
         }
 
         /// <summary>
-        /// This is the main UPSERT method to populate the database.
+        /// This is the main UPSERT method to populate the database
         /// </summary>
-        /// <param name="define">Info about metadata to apply to the key</param>
-        public async Task DefineAsync(Define define)
+        /// <param name="table">Which table to UPSERT into</param>
+        /// <param name="key">Primary key of the row to UPSERT</param>
+        /// <param name="columnData">Column data for the row</param>
+        public async Task DefineAsync(string table, object key, Dictionary<string, object> columnData)
         {
-            bool isKeyNumeric = !(define.key is string);
-            int tableId = await Tables.GetIdAsync(this, define.table, isKeyNumeric).ConfigureAwait(false);
-            long valueId = await Values.GetIdAsync(this, define.key).ConfigureAwait(false);
+            bool isKeyNumeric = !(key is string);
+            int tableId = await Tables.GetIdAsync(this, table, isKeyNumeric).ConfigureAwait(false);
+            long valueId = await Values.GetIdAsync(this, key).ConfigureAwait(false);
             long itemId = await Items.GetIdAsync(this, tableId, valueId).ConfigureAwait(false);
 
-            if (define.metadata != null)
+            if (columnData != null)
             {
                 // name => nameid
                 var nameValueIds = new Dictionary<int, long>();
-                foreach (var kvp in define.metadata)
+                foreach (var kvp in columnData)
                 {
                     bool isMetadataNumeric = !(kvp.Value is string);
                     int nameId = await Names.GetIdAsync(this, tableId, kvp.Key, isMetadataNumeric).ConfigureAwait(false);
@@ -266,14 +268,9 @@ namespace fourdb
         /// <summary>
         /// Reset the database
         /// </summary>
-        /// <param name="includeNameValues">true to wipe everything, false only table rows</param>
-        public void Reset(bool includeNameValues = false)
+        public void Reset()
         {
-            if (includeNameValues)
-                NameValues.Reset(this);
-            else
-                Items.Reset(this);
-
+            NameValues.Reset(this);
             NameValues.ClearCaches();
         }
 
@@ -329,11 +326,8 @@ namespace fourdb
             await Tables.GetIdAsync(this, name, isNumeric).ConfigureAwait(false);
         }
 
-        /// <summary>
-        /// Run a SQL statement
-        /// </summary>
-        /// <param name="sql">Query to run</param>
-        public async Task RunSqlAsync(string sql)
+        // NOTE: Used internally to run arbitrary SQL
+        internal async Task RunSqlAsync(string sql)
         {
             await Db.ExecuteSqlAsync(sql).ConfigureAwait(false);
         }
