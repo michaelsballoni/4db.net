@@ -23,8 +23,13 @@ namespace fourdb
             // The Context class manages the SQLite database connection,
             // provides many useful functions for executing SELECT queries,
             // and implements the UPSERT, DELETE, and DROP functions.
+            Console.WriteLine("Opening database...");
             using (var ctxt = new Context("cars.db"))
             {
+				// Drop the table to start things clean for this run.
+                Console.WriteLine("Starting up...");
+                await ctxt.DropAsync("cars");
+
                 // Pass our Context into AddCarAsync to add database records...so many cars...
                 Console.WriteLine("Adding cars...");
                 await AddCarAsync(ctxt, 1987, "Nissan", "Pathfinder");
@@ -73,10 +78,6 @@ namespace fourdb
                 // We use the list of row IDs to delete some rows.
                 Console.WriteLine("Deleting old cars...");
                 await ctxt.DeleteAsync("cars", oldCarGuids);
-
-                // Drop the table to keep things clean for the next run.
-                Console.WriteLine("Cleaning up...");
-                await ctxt.DropAsync("cars");
 
                 Console.WriteLine("All done.");
             }
