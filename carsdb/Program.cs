@@ -1,13 +1,14 @@
 ﻿using System;
 using System.Threading.Tasks;
 using System.Collections.Generic;
-using System.IO;
 
 namespace fourdb
 {
     /// <summary>
-    /// This program demonstrates creating a NoSQL database and using all four of the supported commands
-    /// to populate and manipulate a database storing a catalog of cars.
+    /// This program demonstrates creating a NoSQL database 
+    /// and using all four of the supported commands to 
+    /// populate and manipulate a database storing a catalog 
+    /// of cars:
     /// 1. UPSERT
     /// 2. SELECT
     /// 3. DELETE
@@ -37,17 +38,18 @@ namespace fourdb
                 await AddCarAsync(ctxt, 2001, "Nissan", "Xterra");
                 //...
 
-                // Select data out of the database using a basic dialect of SQL
+                // Select data out of the database using a basic dialect of SQL.
                 // Restrictions:
                 // 1. No JOINs
                 // 2. WHERE criteria must use parameters
                 // 3. ORDER BY colums must be in SELECT column list
-                // Here we gather the "value" pseudo-column, the row ID created by the AddCarAsync function
+                // Here we gather the "value" pseudo-column, the primary key,
+                // created by the AddCarAsync function.
                 // We create a Select object with our SELECT query,
                 // pass in the value for the @year parameter,
                 // and use the Context.ExecSelectAsync function to execute the query.
                 Console.WriteLine("Getting old cars...");
-                var oldCarGuids = new List<string>();
+                var oldCarKeys = new List<string>();
                 Select select = 
                     Sql.Parse
                     (
@@ -56,14 +58,14 @@ namespace fourdb
                         "WHERE year < @year " +
                         "ORDER BY year ASC"
                     );
-                select.AddParam("@year", 1990);
+                select.AddParam("@year", 2000);
                 using (var reader = await ctxt.ExecSelectAsync(select))
                 {
                     // NOTE: reader is a System.Data.Common.DbDataReader straight out of SQLite
                     while (reader.Read())
                     {
-                        // Collect the row ID GUID that AddCarAsync added
-                        oldCarGuids.Add(reader.GetString(0));
+                        // Collect the primary key that AddCarAsync added
+                        oldCarKeys.Add(reader.GetString(0));
 
                         // 4db values are either numbers (doubles) or strings
                         Console.WriteLine
@@ -75,16 +77,22 @@ namespace fourdb
                     }
                 }
 
-                // We use the list of row IDs to delete some rows.
+                // We use the list of primary keys to delete some rows.
                 Console.WriteLine("Deleting old cars...");
-                await ctxt.DeleteAsync("cars", oldCarGuids);
+                await ctxt.DeleteAsync("cars", oldCarKeys);
 
                 Console.WriteLine("All done.");
             }
         }
 
         /// <summary>
-        /// UPSERT a car into our database
+        /// UPSERT a car into our database using the define function.
+        /// You pass the table name, primary key value, and column data to this function.
+        /// No need to explicitly create tables, just refer to them and define takes care of it.
+        /// NOTE: The primary key value and column data values
+        ///       can only be strings or numbers.
+        ///       For numbers, they have to be convertible to doubles,
+        ///       and are selected out of the database as doubles.
         /// </summary>
         /// <param name="ctxt">The Context for doing database work</param>
         /// <param name="year">The year of the car</param>
@@ -92,18 +100,8 @@ namespace fourdb
         /// <param name="model">The model of the car</param>
         static async Task AddCarAsync(Context ctxt, int year, string make, string model)
         {
-            // The Define function is used to do UPSERTs.
-            // You pass the table name, primary key value, and column data.
-            // No need to create tables, just refer to them and the database takes care of it.
-            // The second parameter to the Define function is the row ID.
-            // There's no obvious primary key so we use a GUID.
-            // We collect our column data in a simple Dictionary.
-            // NOTE: The primary key value and column data values
-            //       can only be strings or numbers.
-            //       For numbers, they have to be convertible to doubles,
-            //       and tolerated when selected out and returned as doubles.
             string tableName = "cars";
-            object primaryKey = Guid.NewGuid().ToString();
+            object primaryKey = year + "_" + make + "_" + model;
             var columnData = new Dictionary<string, object>
             {
                 { "year", year },
