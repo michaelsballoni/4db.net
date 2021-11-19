@@ -24,6 +24,8 @@ namespace fourdb
             // The Context class manages the SQLite database connection,
             // provides many useful functions for executing SELECT queries,
             // and implements the UPSERT, DELETE, and DROP functions.
+            // There are many classes in 4db, but Context is the one you deal directly with;
+            // you can var the rest as seen here.
             Console.WriteLine("Opening database...");
             using (var ctxt = new Context("cars.db"))
             {
@@ -39,18 +41,15 @@ namespace fourdb
                 //...
 
                 // Select data out of the database using a basic dialect of SQL.
-                // Restrictions:
-                // 1. No JOINs
-                // 2. WHERE criteria must use parameters
-                // 3. ORDER BY colums must be in SELECT column list
                 // Here we gather the "value" pseudo-column, the primary key,
                 // created by the AddCarAsync function.
                 // We create a Select object with our SELECT query,
                 // pass in the value for the @year parameter,
-                // and use the Context.ExecSelectAsync function to execute the query.
+                // and use the Context.ExecSelectAsync function to execute the query,
+                // handing back a reader object to process the results.
                 Console.WriteLine("Getting old cars...");
                 var oldCarKeys = new List<string>();
-                Select select = 
+                var select = 
                     Sql.Parse
                     (
                         "SELECT value, year, make, model " +
@@ -61,7 +60,6 @@ namespace fourdb
                 select.AddParam("@year", 2000);
                 using (var reader = await ctxt.ExecSelectAsync(select))
                 {
-                    // NOTE: reader is a System.Data.Common.DbDataReader straight out of SQLite
                     while (reader.Read())
                     {
                         // Collect the primary key that AddCarAsync added
@@ -78,7 +76,7 @@ namespace fourdb
                 }
 
                 // We use the list of primary keys to delete some rows.
-                Console.WriteLine("Deleting old cars...");
+                Console.WriteLine($"Deleting old cars... ({oldCarKeys.Count})");
                 await ctxt.DeleteAsync("cars", oldCarKeys);
 
                 Console.WriteLine("All done.");
@@ -88,7 +86,8 @@ namespace fourdb
         /// <summary>
         /// UPSERT a car into our database using the define function.
         /// You pass the table name, primary key value, and column data to this function.
-        /// No need to explicitly create tables, just refer to them and define takes care of it.
+        /// No need to explicitly create the table, just refer to it by name 
+        /// and the define function takes care of it.
         /// NOTE: The primary key value and column data values
         ///       can only be strings or numbers.
         ///       For numbers, they have to be convertible to doubles,
